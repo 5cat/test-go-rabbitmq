@@ -1,0 +1,54 @@
+version: "3"
+
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.9.29-management-alpine
+    env_file: .env
+    ports:
+      - "8080:15672"
+    expose:
+      - $RABBITMQ_NODE_PORT
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 5s
+      timeout: 20s
+      retries: 5
+
+  consumer:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        BUILD_PATH: src/consumer
+    env_file: .env
+    entrypoint: /pikapo
+    command:
+      - -uri=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:${RABBITMQ_NODE_PORT}/
+      - -lifetime=999999s
+      - -n-workers=${N_WORKERS}
+      - -exchange=${RABBITMQ_EXCHANGE}
+      - -exchange-type=${RABBITMQ_EXCHANGE_TYPE}
+      - -queue=${RABBITMQ_QUEUE}
+      - -key=${RABBITMQ_KEY}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+  publisher:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        BUILD_PATH: src/publisher
+    env_file: .env
+    entrypoint: /pikapo
+    command:
+      - -uri=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:${RABBITMQ_NODE_PORT}/
+      - -exchange=${RABBITMQ_EXCHANGE}
+      - -exchange-type=${RABBITMQ_EXCHANGE_TYPE}
+      - -queue=${RABBITMQ_QUEUE}
+      - -key=${RABBITMQ_KEY}
+      - -publish-rate=${PUBLISH_RATE}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
